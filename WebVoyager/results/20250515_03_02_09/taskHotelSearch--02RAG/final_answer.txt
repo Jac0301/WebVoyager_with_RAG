@@ -1,0 +1,3 @@
+The 'Travel Sustainable properties' filter (labeled as 'Sustainability certification') has been successfully applied to hotel search results in Osaka for June 10-15, 2025. Only hotels with sustainability certification are now shown.
+
+Instruction Cue: Manual Ref: BookingComAdvancedFeatures.md, Section 2.3 – I scrolled down the left-hand sidebar on the search results page, located the section labeled 'Sustainability certification,' and enabled it to display only Travel Sustainable properties, as instructed in the manual.

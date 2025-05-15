@@ -1,0 +1,3 @@
+The 'Travel Sustainable properties' filter (displayed as 'Sustainability certification') has been found and successfully applied to your Osaka hotel search (June 10-15, 2025) on Booking.com. 
+
+Instruction Cue: Manual Ref: BookingComAdvancedFeatures.md, Section 2.3 - I followed the manual's guidance to scroll down the left-hand sidebar until the sustainability filter section became visible and then enabled the filter labelled 'Sustainability certification', which corresponds to 'Travel Sustainable properties'.

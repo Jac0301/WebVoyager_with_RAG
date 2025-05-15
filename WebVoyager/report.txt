@@ -1,0 +1,137 @@
+Assignment 2 Report: Agentic AI with Reflection and Multi-Agent Collaboration using AutoGen
+
+**1. Multi-Agent System Design for Task Collaboration (20%)**
+
+*How can you design a Multi-Agent system to collaboratively complete tasks in a web-based environment? For example, how can agents coordinate to perform actions such as form filling, submission, and data searching?*
+
+We leverage the `autogen` framework to design a multi-agent system for web-based tasks. The core idea is to assign specialized roles to different agents and orchestrate their interaction through `autogen`'s conversation management, enhanced with custom reply handlers and strict communication protocols.
+
+*   **Planner Agent:** An `autogen.AssistantAgent` responsible for high-level planning. It receives the task, analyzes the current web state (multimodal observation: screenshot + text), consults the conversation history (trajectory), and incorporates feedback from the Error Grounder. It decides the next single action and MUST output it as a JSON object within ```json ... ``` tags, preceded by its reasoning.
+*   **User Proxy Agent (Initiator & Executor):** An `autogen.UserProxyAgent` that initiates the conversation with the task. Crucially, it acts as the execution layer. It registers Python functions (e.g., `click_element`, `type_element`) that encapsulate Selenium browser interactions. It uses a custom reply function (`execute_web_action_and_reflect`) to intercept messages from the Planner. This handler parses the Planner's JSON action, calls the appropriate registered function, manages the reflection loop with the Error Grounder, and sends the combined results back to the Planner. It also handles task termination when the `answer` function is called.
+*   **Error Grounding Agent:** An `autogen.AssistantAgent` specialized in error detection using multimodal input (text description of action/result + screenshot). It receives the Planner's intended action and the actual outcome (status, message, new observation) from the User Proxy's custom reply handler. Using its vision capabilities and a specific prompt, it determines if an error occurred. It MUST respond ONLY with a JSON object containing `errors` ("Yes"/"No") and an `explanation` (including a suggested correction if `errors` is "Yes").
+*   **(Implicit) Perception Module:** The `get_current_observation` function acts as the perception module, capturing the browser's state (screenshot, labeled elements, text) and returning it along with a cache of `WebElement` objects mapped to numerical IDs.
+
+Coordination happens through a structured conversation flow managed by `autogen` and the custom reply function:
+1.  User Proxy sends the initial task and observation to the Planner.
+2.  Planner analyzes, decides on an action (e.g., "type 'search term' into element 5"), and sends its reasoning followed by the action JSON: ```json {"function": "type_element", "args": {"element_id": 5, "content": "search term"}} ```.
+3.  User Proxy's `execute_web_action_and_reflect` handler intercepts this message.
+4.  The handler parses the JSON, calls the registered `type_element(element_id=5, content="search term")` function.
+5.  The `type_element` function executes the Selenium commands, calls `get_current_observation` for the new state, and returns a result dictionary (status, message, new observation text, new base64 image).
+6.  The handler receives the result and sends the attempted action + result (including the new screenshot) to the Error Grounding Agent.
+7.  Error Grounding Agent analyzes the multimodal input and replies with its feedback JSON: ```json {"errors": "No", "explanation": "No errors detected."} ```.
+8.  The handler receives the feedback, combines it with the action result/observation, and sends this complete package back to the Planner.
+This cycle repeats, incorporating structured error feedback when necessary.
+
+**2. Error Analysis and Strategy Adjustment in AI Agents (20%)**
+
+*How can an AI agent analyze its own errors after performing web-based operations, and adjust its strategy accordingly? What techniques or mechanisms can be used to identify failure patterns and improve future performance?*
+
+In our `autogen` system, error analysis and strategy adjustment are handled by the coordinated effort of the Error Grounding Agent and the Planner, facilitated by the User Proxy's custom reply function:
+
+*   **Error Detection (Multimodal):** The dedicated Error Grounding Agent compares the Planner's intended action with the actual outcome (status, message, and crucially, the visual state in the screenshot). It identifies discrepancies using its prompt and vision capabilities (e.g., wrong element clicked, unexpected UI change, validation errors visible).
+*   **Structured Error Reporting:** The Grounding Agent provides structured feedback ONLY as JSON: `{"errors": "Yes", "explanation": "{error description, probable cause, specific suggestion}"}`. This format is strictly enforced by its prompt.
+*   **Strategy Adjustment:** The Planner receives this structured JSON feedback as part of the observation from the User Proxy. Its core prompt explicitly instructs it: "If you receive error feedback (`errors: Yes`), analyze its explanation and suggestion. Adjust the plan to correct the mistake before proceeding."
+*   **Identifying Failure Patterns (Trajectory Review):** The conversation history (trajectory) maintained by `autogen` is vital. The Planner's prompt guides it to review this history: "Examine the sequence of previous actions, observations, and error reports. Avoid repeating actions that previously led to errors or resulted in no change... If stuck in a loop, consider alternative strategies..."
+*   **Robust Logging:** Enhanced `safe_log` function and encoding fallbacks (e.g., `ensure_ascii=True` when saving JSON) are implemented in `run.py` to prevent crashes due to encoding errors (like `UnicodeEncodeError` on Windows consoles) and ensure execution details are captured reliably in log files (`agent.log`, `autogen_chat_history.json`, `all_tasks_summary.json`).
+
+**3. Reflection Strategies in Agentic Systems (20%)**
+
+*What reflection strategies can be used in AI agents or Multi-Agent systems to improve performance? For example, how can self-reflection, peer-review, or planning revisions be implemented after task execution?*
+
+Our `autogen` system implements reflection primarily through:
+
+*   **Self-Reflection (Planner's Trajectory Review):** The Planner agent performs self-reflection by reviewing the conversation history (past actions, observations, and crucially, the structured error feedback from the Grounder) before planning the next step. Its prompt explicitly guides this process to avoid repetition and learn from mistakes.
+*   **Peer Review (Error Grounder's Analysis):** The Error Grounding Agent acts as a specialized peer reviewer for the *outcome* of the action executed by the User Proxy based on the Planner's instruction. It evaluates the result against the intention using multimodal analysis and provides structured, actionable feedback in JSON format.
+*   **Planning Revisions (Planner's Response to Feedback):** This is a direct consequence of the reflection loop. When the Grounder's feedback indicates an error (`"errors": "Yes"`), the Planner is prompted to analyze the `explanation` and revise its plan accordingly before issuing the next action JSON. This iterative refinement is central to the system's ability to recover from errors.
+*   **Structured Reflection Loop:** The custom reply function (`execute_web_action_and_reflect`) in the User Proxy orchestrates this reflection cycle systematically after *every* action, ensuring feedback is consistently generated and provided to the Planner.
+
+**4. Agentic AI System Architecture (10%)**
+
+*Describe the architecture of an Agentic AI system with a diagram. Illustrate and explain the core components—such as Perception, Reasoning (Brain), Action, and Reflection—and how they interact. If applicable, show how multiple agents collaborate within this architecture.*
+
+**(Diagram Description - updated conceptual representation)**
+
+```mermaid
+graph LR
+    subgraph User
+        U[User Task]
+    end
+
+    subgraph Environment[Web Browser]
+        direction LR
+        Screen[Screenshot/DOM]
+    end
+
+    subgraph Agent_System[AutoGen Agent System]
+        direction LR
+
+        subgraph Core_Components
+            direction TB
+            Perception[Perception Module<br>(get_current_observation)];
+            Planner[Planner Agent<br>(Brain/Reasoning)];
+            UserProxy[User Proxy Agent<br>(Initiator)];
+            ErrorGrounder[Error Grounding Agent<br>(Reflection)];
+            Trajectory[(Conversation History<br>Trajectory Buffer)];
+        end
+
+        subgraph Execution_Loop
+            direction TB
+            UserProxyReplyHandler{User Proxy Reply Handler<br>(execute_web_action_and_reflect)};
+            RegisteredFunctions[Registered Browser<br>Functions (e.g., click_element)];
+            Environment_Interface[Browser Control<br>(Selenium)];
+        end
+
+        UserProxy -- Initial Task --> Planner;
+        Planner -- Reads --> Trajectory;
+        Perception -- Observation --> Planner;
+
+        Planner -- Action JSON --> UserProxyReplyHandler;
+
+        UserProxyReplyHandler -- Calls Function --> RegisteredFunctions;
+        RegisteredFunctions -- Executes --> Environment_Interface;
+        Environment_Interface -- Interaction --> Screen;
+        Environment_Interface -- Raw Observation --> Perception;
+        RegisteredFunctions -- Result Dict --> UserProxyReplyHandler;
+
+        UserProxyReplyHandler -- Action + Result + Screenshot --> ErrorGrounder;
+        ErrorGrounder -- Reads Context --> Trajectory;
+        ErrorGrounder -- Feedback JSON --> UserProxyReplyHandler;
+
+        UserProxyReplyHandler -- Combined Result/Feedback --> Planner;
+
+        Planner -- Answer JSON --> UserProxyReplyHandler; # Termination Check
+        UserProxyReplyHandler -- Termination Signal --> UserProxy; # End Chat
+    end
+
+    User --> U;
+    U -- Task --> UserProxy;
+    Environment --> Perception;
+
+    style Environment fill:#f9f,stroke:#333,stroke-width:2px
+    style Agent_System fill:#ccf,stroke:#333,stroke-width:2px
+```
+
+*   **Core Components:**
+    *   **Perception (`get_current_observation`):** Captures the browser state (screenshot, DOM info, interactive elements), adds numerical labels, caches `WebElement` objects mapped to these labels, and returns text description + base64 image + element cache.
+    *   **Reasoning (Brain - Planner Agent):** Analyzes the task, multimodal observation, trajectory history, and structured JSON feedback from the Error Grounder. Plans the next single action and outputs it strictly as a JSON object within ```json ... ``` tags.
+    *   **Action (User Proxy Agent + Registered Functions + Custom Reply Handler):** The User Proxy initiates the process. Browser interactions are encapsulated in registered Python functions (e.g., `click_element`). The crucial `execute_web_action_and_reflect` reply handler, registered on the User Proxy, intercepts the Planner's action JSON, calls the correct registered function, manages the reflection cycle with the Error Grounder, and formats the combined response for the Planner.
+    *   **Reflection (Error Grounding Agent & Planner's Review):**
+        *   The *Error Grounding Agent* performs explicit, multimodal reflection on the outcome of each action, providing structured JSON feedback.
+        *   The *Planner* performs implicit reflection by reviewing the Trajectory Buffer (including past Grounder feedback) to refine its strategy and avoid loops.
+    *   **Trajectory Buffer (AutoGen Conversation History):** Stores the sequence of messages (Planner reasoning/action JSONs, combined User Proxy observations/feedback, Grounder JSON feedback) managed automatically by `autogen`. Essential for Planner's self-reflection.
+*   **Interaction Flow & Multi-Agent Collaboration:**
+    1.  The **User Proxy** provides the initial task and initial observation (from `get_current_observation`) to the **Planner**.
+    2.  Browser interaction functions (`click_element`, etc.) are registered with the **User Proxy**. The `execute_web_action_and_reflect` reply handler is registered to intercept messages *from* the Planner.
+    3.  The **Planner (Brain)** analyzes the Task, Observation, and Trajectory. It formulates reasoning and decides on an action, sending a message containing the reasoning text followed by the action formatted as ```json ... ```.
+    4.  The **User Proxy's custom reply handler** intercepts the Planner's message.
+    5.  The handler parses the JSON, identifies the function (e.g., `click_element`) and arguments.
+    6.  It calls the corresponding **registered browser function** (e.g., `click_element(element_id=15)`).
+    7.  The browser function executes the Selenium action, calls **Perception** (`get_current_observation`) to capture the new state, and returns a result dictionary (status, message, observation_text, base64_image).
+    8.  The handler receives this result dictionary.
+    9.  The handler formats a multimodal message (action details + result + new screenshot) and sends it to the **Error Grounding Agent (Reflection)**.
+    10. The **Error Grounding Agent** analyzes the action, result, and screenshot, then replies with its feedback strictly formatted as JSON (`{"errors": ..., "explanation": ...}`).
+    11. The handler receives the Grounder's JSON feedback. It combines the action result (status, message, new observation text, new base64 image) and the Grounder's feedback into a single multimodal message.
+    12. The handler sends this combined message back to the **Planner** to start the next reasoning cycle.
+    13. This loop continues until the Planner calls the `answer` function. The handler detects this, executes the `answer` function (which saves the result), and returns a termination message, ending the `autogen` chat.
+*   **Implementation Status:** The described multi-agent architecture, featuring a Planner, Error Grounder, and User Proxy (acting as initiator and function executor via registered functions and a custom reply handler), is implemented in `run.py` using the `autogen` framework. The core interaction loop, including structured JSON communication between agents, multimodal observation handling, error grounding reflection with JSON feedback, robust logging with encoding fallbacks, and task termination via the `answer` function, has been implemented and refined through testing.
+    

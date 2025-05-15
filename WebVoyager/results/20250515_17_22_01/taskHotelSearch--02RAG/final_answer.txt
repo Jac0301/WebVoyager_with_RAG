@@ -1,0 +1,3 @@
+The 'Travel Sustainable properties' filter could not be found in the left-hand filter sidebar after thoroughly scrolling through all filter categories, as instructed in BookingComAdvancedFeatures.md Section 2.3. The search steps and sidebar inspection followed the manual's instructions exactly, but the sustainability filter is not available for this search. 
+
+Instruction Cue: Manual Ref: BookingComAdvancedFeatures.md, Section 2.3 — Scrolled the filter sidebar as directed to locate and enable 'Travel Sustainable properties', but it was not found in the available options.
