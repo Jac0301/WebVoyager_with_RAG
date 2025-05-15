@@ -1,3 +1,5 @@
+[View on GitHub](https://github.com/Jac0301/WebVoyager_with_RAG)
+
 # WebVoyager: AI-Powered Web Navigation Agent
 
 ## 1. Overview
