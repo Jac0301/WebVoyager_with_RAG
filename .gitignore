@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*.env
+*.venv
+env/
+venv/
+ENV/
+VENV/
+pip-selfcheck.json
+pyvenv.cfg
+
+# IDE configuration
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Operating System files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Build and distribution
+*.egg-info/
+dist/
+build/
+*.tar.gz
+*.zip
+*.whl
+
+# Project-specific output, data, and sensitive files
+# IMPORTANT: Never commit your API keys or other secrets!
+WebVoyager/OAI_CONFIG_LIST
+WebVoyager/results/
+WebVoyager/downloads/
+WebVoyager/chroma_db/
+
+# Logs that might be generated in the WebVoyager directory
+WebVoyager/agent.log
+WebVoyager/test_tasks.log
+WebVoyager/*.log
+
+# If the 'autogen/' directory at the project root (WebVoyager_with_RAG/autogen/)
+# is a library managed by pip (e.g., via pyautogen in requirements.txt) or
+# downloaded examples, it should typically be ignored.
+# If it contains your custom source code essential to the project and not installed via pip,
+# then remove the next line.
+autogen/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Coverage reports
+.coverage
+coverage.xml
+htmlcov/
+
+# Cache directory
+WebVoyager/.cache/ 
